@@ -28,6 +28,9 @@ export default function Arena() {
     useEffect(() => {
         lab.stado().then((s) => { setStado(s.gatunki); setPowod(s.powod); setWiek(s.migawka?.wiekSekund ?? null); }).catch((e) => toast.error(e.message));
         void odswiez();
+        // Przejście z dziennika projektu chipu („pełny transkrypt w Arenie →").
+        const id = sessionStorage.getItem('lab_arena_otworz');
+        if (id) { sessionStorage.removeItem('lab_arena_otworz'); lab.arena(id).then(setOtwarta).catch(() => {}); }
     }, []);
     // Trwająca arena — odpytuj co 4 s.
     useEffect(() => {

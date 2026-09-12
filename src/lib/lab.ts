@@ -16,13 +16,15 @@ export interface Eksperyment {
     sha?: string; statystyka?: string; diff?: string; diffZnakow?: number; uwagaModelu?: string | null; uwaga?: string; powodOdrzucenia?: string | null; bazaHead?: string;
 }
 
-export interface Gatunek { id: string; imie: string; dziedzina: string; kolor: string; forma: string; etap: string; xp: number }
+export interface Gatunek { id: string; imie: string; dziedzina: string; kolor: string; forma: string; etap: string; xp: number; wyklute?: boolean }
 export interface Wypowiedz { runda: number; id: string; imie: string; dziedzina: string; kolor: string; forma: string; tekst: string; kiedy: string }
 export interface Arena { id: string; temat: string; rundy: number; model: string; uczestnicy: Gatunek[]; start: string; koniec?: string; stan: 'trwa' | 'gotowa' | 'padla'; runda: number; transkrypt?: Wypowiedz[]; wypowiedzi?: number; wnioski: string | null; blad: string | null }
 
 export interface SpecChipu { parametryMld: number; bity: number; warstwy: number; dModel: number; kontekst: number; kvBity: number; grupyGqa: number; tokS: number; strumienie: number }
 export interface LiczbyChipu { wejscie: SpecChipu; wagiGB: number; kvNaTokenKB: number; kvGB: number; pamiecGB: number; tflops: number; pasmoGBs: number; stosyHbm: number; hbm: { gbsNaStos: number; gbNaStos: number }; uwaga: string }
-export interface Chip { id: string; nazwa: string; spec: SpecChipu; liczby: LiczbyChipu; data: string; model: string | null; nota: string | null; notaZnakow?: number; skrypt: string | null; render: string | null; blend: string | null; blenderWersja?: string }
+export interface Pytanie { id: string; tresc: string; stan: 'otwarte' | 'bada' | 'zbadane'; kto: string; data: string; badanieId: string | null; arenaId?: string }
+export interface Wpis { id: string; rodzaj: 'notatka' | 'badanie'; kto: string; data: string; tresc?: string; pytanie?: string; pytanieId?: string; arenaId?: string; wnioski?: string | null; stan?: string; blad?: string | null; model?: string }
+export interface Chip { id: string; nazwa: string; spec: SpecChipu; liczby: LiczbyChipu; data: string; model: string | null; nota: string | null; notaZnakow?: number; skrypt: string | null; render: string | null; blend: string | null; blenderWersja?: string; zAnalizy?: string | null; dziennik?: Wpis[]; pytania?: Pytanie[]; pytanOtwartych?: number; badan?: number; notatek?: number }
 export interface Analiza { id: string; nazwa: string; znakow: number; stron?: number | null; pytanie: string | null; model: string; analiza: string; data: string; maZrodlo?: boolean; projektId?: string | null; uciete?: number }
 export interface SpecZAnalizy { analizaId: string; nazwa: string; spec: Record<keyof SpecChipu, number | null>; zPliku: string[]; domyslne: string[]; uzasadnienie: string; model: string }
 export interface StanBlendera { jest: boolean; sciezka?: string; wersja?: string; powod?: string; cozrobic?: string }
@@ -69,6 +71,11 @@ export const lab = {
         if (!r.ok || !d.success) throw new Error(d.message || `HTTP ${r.status}`);
         return d as Ok<Analiza>;
     },
+    notatka: (id: string, tresc: string) => bridge.post<Ok<Chip>>(`/api/lab/chipy/${id}/notatka`, { tresc }),
+    pytanie: (id: string, tresc: string) => bridge.post<Ok<Chip>>(`/api/lab/chipy/${id}/pytanie`, { tresc }),
+    usunWpis: (id: string, wid: string) => fetch(`${BRIDGE}/api/lab/chipy/${id}/wpis/${wid}`, { method: 'DELETE' }),
+    usunPytanie: (id: string, pid: string) => fetch(`${BRIDGE}/api/lab/chipy/${id}/pytanie/${pid}`, { method: 'DELETE' }),
+    badaj: (id: string, b: { pytanieId?: string; uczestnicy?: string[]; rundy?: number; model?: string }) => bridge.post<Ok<{ arena: string; uczestnicy: string[] }>>(`/api/lab/chipy/${id}/badaj`, b),
     specZAnalizy: (id: string, model?: string) => bridge.post<Ok<SpecZAnalizy>>(`/api/lab/chipy/analizy/${id}/spec`, { model }),
     renderUrl: (id: string) => `${BRIDGE}/api/lab/chipy/${id}/render`,
 };
