@@ -125,7 +125,7 @@ export default function Chipy() {
             <section>
                 <h3 className="mb-2 text-sm uppercase tracking-widest text-slate-400">Projekty ({chipy.length})</h3>
                 <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                    {chipy.map((c) => (
+                    {chipy.filter((c) => c.liczby).map((c) => (
                         <button key={c.id} onClick={() => lab.chip(c.id).then(setOtwarty)} className="rounded-xl border border-white/10 bg-lab-panel p-3 text-left hover:border-lab-primary/40">
                             <div className="text-sm font-bold text-white">{c.nazwa}</div>
                             <div className="font-mono text-[10px] text-slate-500">{c.liczby.pamiecGB} GB · {c.liczby.pasmoGBs} GB/s · {c.liczby.stosyHbm}× HBM · {c.render ? 'render ✓' : 'bez renderu'} · {kiedy(c.data)}</div>
