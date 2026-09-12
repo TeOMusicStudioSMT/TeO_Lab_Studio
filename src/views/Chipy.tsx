@@ -11,9 +11,9 @@
  * Własne pliki (tekstowe) → analiza modelem pod kątem projektu układu.
  */
 import { useEffect, useState } from 'react';
-import { Cpu, Loader2, Upload, Box } from 'lucide-react';
+import { Cpu, Loader2, Upload, Box, Hammer } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { lab, model, kiedy, type SpecChipu, type LiczbyChipu, type Chip, type Analiza, type StanBlendera } from '../lib/lab';
+import { lab, model, kiedy, type SpecChipu, type LiczbyChipu, type Chip, type Analiza, type StanBlendera, type SpecZAnalizy } from '../lib/lab';
 
 const DOMYSLNA: SpecChipu = { parametryMld: 8, bity: 8, warstwy: 32, dModel: 4096, kontekst: 8192, kvBity: 16, grupyGqa: 4, tokS: 40, strumienie: 1 };
 
@@ -43,6 +43,9 @@ export default function Chipy() {
     const [wklejka, setWklejka] = useState('');
     const [pytanie, setPytanie] = useState('');
     const [analizuje, setAnalizuje] = useState(false);
+    // 🔨 Przekucie analizy w projekt: które pola przyszły Z PLIKU, a które zostały domyślne.
+    const [zAnalizy, setZAnalizy] = useState<SpecZAnalizy | null>(null);
+    const [przekuwa, setPrzekuwa] = useState<string | null>(null);
 
     const odswiez = () => Promise.all([lab.chipy().then(setChipy), lab.analizy().then(setAnalizy)]).catch(() => {});
     useEffect(() => { void odswiez(); lab.blender().then(setBlender).catch(() => setBlender(null)); }, []);
@@ -53,7 +56,7 @@ export default function Chipy() {
 
     const projektuj = async (bezNoty: boolean) => {
         setLiczy(true);
-        try { const c = await lab.projektuj({ nazwa, spec, model: model(), bezNoty }); setOtwarty(c); toast.success(`Projekt „${c.nazwa}" zapisany.`); void odswiez(); }
+        try { const c = await lab.projektuj({ nazwa, spec, model: model(), bezNoty, zAnalizy: zAnalizy?.analizaId ?? null }); setOtwarty(c); setZAnalizy(null); toast.success(`Projekt „${c.nazwa}" zapisany.`); void odswiez(); }
         catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
         finally { setLiczy(false); }
     };
@@ -66,9 +69,23 @@ export default function Chipy() {
     const analizuj = async () => {
         if (!plik && !wklejka.trim()) return toast.error('Wybierz plik albo wklej treść.');
         setAnalizuje(true);
-        try { await lab.analizuj(plik, wklejka, pytanie); toast.success('Analiza gotowa.'); setPlik(null); setWklejka(''); void odswiez(); }
+        try { const a = await lab.analizuj(plik, wklejka, pytanie); toast.success(a.uciete ? `Analiza gotowa — plik ucięty o ${a.uciete} znaków (limit modelu).` : 'Analiza gotowa.', { duration: 6000 }); setPlik(null); setWklejka(''); void odswiez(); }
         catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
         finally { setAnalizuje(false); }
+    };
+
+    const przekuj = async (a: Analiza) => {
+        setPrzekuwa(a.id);
+        try {
+            const r = await lab.specZAnalizy(a.id, model());
+            // Tylko pola, które model znalazł w pliku — reszta zostaje jak w formularzu.
+            setSpec((s) => { const n = { ...s }; for (const k of Object.keys(r.spec) as (keyof SpecChipu)[]) { const v = r.spec[k]; if (v !== null) n[k] = v; } return n; });
+            setNazwa(r.nazwa);
+            setZAnalizy(r);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            toast.success(`${r.zPliku.length} pól z pliku, ${r.domyslne.length} domyślnych — sprawdź i kliknij Projektuj.`, { duration: 7000 });
+        } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+        finally { setPrzekuwa(null); }
     };
 
     if (otwarty) {
@@ -102,11 +119,20 @@ export default function Chipy() {
             </div>
             <div className="grid gap-6 lg:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-lab-panel p-5">
+                    {zAnalizy && (
+                        <div className="mb-3 rounded-lg border border-lab-accent/40 bg-lab-accent/10 p-2 text-[11px] text-slate-200">
+                            <div className="font-bold text-lab-accent">Z analizy „{analizy.find((a) => a.id === zAnalizy.analizaId)?.nazwa ?? zAnalizy.analizaId}"</div>
+                            <div>z pliku: <span className="font-mono text-lime-300">{zAnalizy.zPliku.join(', ') || '—'}</span></div>
+                            <div>domyślne (w pliku nie było): <span className="font-mono text-amber-300">{zAnalizy.domyslne.join(', ') || '—'}</span></div>
+                            {zAnalizy.uzasadnienie && <div className="mt-1 text-slate-400">{zAnalizy.model}: {zAnalizy.uzasadnienie}</div>}
+                            <button onClick={() => setZAnalizy(null)} className="mt-1 text-[10px] text-slate-500 hover:text-slate-200">odłącz od analizy</button>
+                        </div>
+                    )}
                     <input value={nazwa} onChange={(e) => setNazwa(e.target.value)} placeholder="nazwa projektu (np. Krzem-8B-Nocny)" className="mb-3 w-full rounded-lg border border-white/10 bg-black/40 p-2 text-sm text-slate-200 outline-none" />
                     <div className="grid grid-cols-3 gap-2">
                         {POLA.map((p) => (
                             <label key={p.k} className="text-[10px] uppercase tracking-wider text-slate-400">{p.et}
-                                <input type="number" value={spec[p.k]} onChange={(e) => setSpec((s) => ({ ...s, [p.k]: Number(e.target.value) }))} className="mt-0.5 w-full rounded border border-white/10 bg-black/40 p-1.5 font-mono text-xs text-slate-200 outline-none" />
+                                <input type="number" value={spec[p.k]} onChange={(e) => setSpec((s) => ({ ...s, [p.k]: Number(e.target.value) }))} className={`mt-0.5 w-full rounded border bg-black/40 p-1.5 font-mono text-xs text-slate-200 outline-none ${zAnalizy ? (zAnalizy.zPliku.includes(p.k) ? 'border-lime-400/60' : 'border-amber-400/40') : 'border-white/10'}`} title={zAnalizy ? (zAnalizy.zPliku.includes(p.k) ? 'z pliku' : 'domyślne — w pliku nie było') : undefined} />
                                 <span className="text-[9px] normal-case text-slate-600">{p.opis}</span>
                             </label>
                         ))}
@@ -137,8 +163,8 @@ export default function Chipy() {
             <section className="grid gap-6 lg:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-lab-panel p-5">
                     <h3 className="mb-2 flex items-center gap-2 font-bold"><Upload size={16} className="text-lab-accent" /> Własny plik z analizą</h3>
-                    <p className="mb-2 text-[11px] text-slate-500">Tekstowe do 2 MB: txt, md, csv, json, yaml, py, Verilog/VHDL, config modelu… Plik nie ląduje na dysku — tylko wynik analizy.</p>
-                    <input type="file" onChange={(e) => setPlik(e.target.files?.[0] ?? null)} className="block w-full text-xs text-slate-400 file:mr-2 file:rounded file:border-0 file:bg-white/10 file:px-2 file:py-1 file:text-xs file:text-slate-200" />
+                    <p className="mb-2 text-[11px] text-slate-500"><b>PDF</b> (warstwa tekstu, bez OCR) albo tekst do 20 MB: txt, md, csv, json, yaml, py, Verilog/VHDL, config modelu… Na dysk idzie wynik + tekst źródła (do „przekucia w projekt"), nie sam plik.</p>
+                    <input type="file" accept=".pdf,.txt,.md,.csv,.json,.yaml,.yml,.py,.v,.sv,.vhd,.vhdl,.toml,.ini,.cfg,.log,.ts,.js" onChange={(e) => setPlik(e.target.files?.[0] ?? null)} className="block w-full text-xs text-slate-400 file:mr-2 file:rounded file:border-0 file:bg-white/10 file:px-2 file:py-1 file:text-xs file:text-slate-200" />
                     <textarea value={wklejka} onChange={(e) => setWklejka(e.target.value)} placeholder="…albo wklej treść (np. config.json modelu)" className="mt-2 h-20 w-full rounded-lg border border-white/10 bg-black/40 p-2 font-mono text-[11px] text-slate-200 outline-none" />
                     <input value={pytanie} onChange={(e) => setPytanie(e.target.value)} placeholder="pytanie (opcjonalnie)" className="mt-2 w-full rounded-lg border border-white/10 bg-black/40 p-2 text-xs text-slate-200 outline-none" />
                     <button onClick={() => void analizuj()} disabled={analizuje} className="mt-2 flex items-center gap-1 rounded-lg bg-lab-accent px-4 py-2 text-xs font-bold text-black disabled:opacity-50">{analizuje ? <Loader2 size={12} className="animate-spin" /> : null} Analizuj modelem</button>
@@ -147,7 +173,12 @@ export default function Chipy() {
                     <div className="text-xs uppercase tracking-widest text-slate-400">Analizy ({analizy.length})</div>
                     {analizy.map((a) => (
                         <details key={a.id} className="rounded-xl border border-white/10 bg-lab-panel p-3">
-                            <summary className="cursor-pointer text-sm text-white">{a.nazwa} <span className="font-mono text-[10px] text-slate-500">· {a.znakow} zn. · {a.model} · {kiedy(a.data)}</span></summary>
+                            <summary className="cursor-pointer text-sm text-white">{a.nazwa} <span className="font-mono text-[10px] text-slate-500">· {a.znakow} zn.{a.stron ? ` · ${a.stron} str.` : ''} · {a.model} · {kiedy(a.data)}{a.projektId ? ' · → projekt' : ''}</span></summary>
+                            <div className="mt-2 flex items-center gap-2">
+                                <button onClick={() => void przekuj(a)} disabled={!!przekuwa} className="flex items-center gap-1 rounded-lg border border-lab-accent/40 px-3 py-1 text-[11px] text-lab-accent disabled:opacity-40">{przekuwa === a.id ? <Loader2 size={11} className="animate-spin" /> : <Hammer size={11} />} Przekuj w projekt</button>
+                                {!a.maZrodlo && <span className="text-[10px] text-slate-500">analiza sprzed zapisu źródła — model wyciągnie parametry tylko z tekstu analizy</span>}
+                                {a.projektId && <button onClick={() => lab.chip(a.projektId!).then(setOtwarty).catch(() => toast.error('Projekt już nie istnieje.'))} className="text-[10px] text-slate-400 hover:text-white">otwórz projekt</button>}
+                            </div>
                             <pre className="mt-2 whitespace-pre-wrap font-sans text-xs text-slate-300">{a.analiza}</pre>
                         </details>
                     ))}

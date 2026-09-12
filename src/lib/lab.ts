@@ -23,7 +23,8 @@ export interface Arena { id: string; temat: string; rundy: number; model: string
 export interface SpecChipu { parametryMld: number; bity: number; warstwy: number; dModel: number; kontekst: number; kvBity: number; grupyGqa: number; tokS: number; strumienie: number }
 export interface LiczbyChipu { wejscie: SpecChipu; wagiGB: number; kvNaTokenKB: number; kvGB: number; pamiecGB: number; tflops: number; pasmoGBs: number; stosyHbm: number; hbm: { gbsNaStos: number; gbNaStos: number }; uwaga: string }
 export interface Chip { id: string; nazwa: string; spec: SpecChipu; liczby: LiczbyChipu; data: string; model: string | null; nota: string | null; notaZnakow?: number; skrypt: string | null; render: string | null; blend: string | null; blenderWersja?: string }
-export interface Analiza { id: string; nazwa: string; znakow: number; pytanie: string | null; model: string; analiza: string; data: string }
+export interface Analiza { id: string; nazwa: string; znakow: number; stron?: number | null; pytanie: string | null; model: string; analiza: string; data: string; maZrodlo?: boolean; projektId?: string | null; uciete?: number }
+export interface SpecZAnalizy { analizaId: string; nazwa: string; spec: Record<keyof SpecChipu, number | null>; zPliku: string[]; domyslne: string[]; uzasadnienie: string; model: string }
 export interface StanBlendera { jest: boolean; sciezka?: string; wersja?: string; powod?: string; cozrobic?: string }
 
 type Ok<T> = { success: true } & T;
@@ -55,7 +56,7 @@ export const lab = {
     policz: (spec: Partial<SpecChipu>) => bridge.post<Ok<LiczbyChipu>>('/api/lab/chipy/policz', spec),
     chipy: () => bridge.get<Lista<Chip>>('/api/lab/chipy').then((d) => d.lista),
     chip: (id: string) => bridge.get<Ok<Chip>>(`/api/lab/chipy/${id}`),
-    projektuj: (b: { nazwa: string; spec: Partial<SpecChipu>; model?: string; bezNoty?: boolean }) => bridge.post<Ok<Chip>>('/api/lab/chipy', b),
+    projektuj: (b: { nazwa: string; spec: Partial<SpecChipu>; model?: string; bezNoty?: boolean; zAnalizy?: string | null }) => bridge.post<Ok<Chip>>('/api/lab/chipy', b),
     renderuj: (id: string) => bridge.post<Ok<Chip>>(`/api/lab/chipy/${id}/render`),
     blender: () => bridge.get<Ok<StanBlendera>>('/api/lab/chipy/blender'),
     analizy: () => bridge.get<Lista<Analiza>>('/api/lab/chipy/analizy').then((d) => d.lista),
@@ -68,6 +69,7 @@ export const lab = {
         if (!r.ok || !d.success) throw new Error(d.message || `HTTP ${r.status}`);
         return d as Ok<Analiza>;
     },
+    specZAnalizy: (id: string, model?: string) => bridge.post<Ok<SpecZAnalizy>>(`/api/lab/chipy/analizy/${id}/spec`, { model }),
     renderUrl: (id: string) => `${BRIDGE}/api/lab/chipy/${id}/render`,
 };
 
